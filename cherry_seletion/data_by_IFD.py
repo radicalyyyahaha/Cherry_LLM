@@ -8,7 +8,7 @@ PROMPT_DICT = {
     "prompt_input": (
         "Below is an instruction that describes a task, paired with an input that provides further context. "
         "Write a response that appropriately completes the request.\n\n"
-        "### Instruction:\n{instruction}\n\n### Input:\n{input}\n\n### Response:"
+        "### Instruction:\n{instruction}\n\n### Input:\n{prompt}\n\n### Response:"
     ),
     "prompt_no_input": (
         "Below is an instruction that describes a task. "
@@ -26,7 +26,7 @@ def parse_args():
     parser.add_argument("--max_length", type=int, default=1024)
     parser.add_argument("--sample_rate", type=float, default=0.1)
     parser.add_argument("--sample_number", type=int, default=0)
-    parser.add_argument("--prompt", type=str, default='alpaca', help='wiz, alpaca')
+    parser.add_argument("--prompt", type=str, default='alpaca', help='wiz, code')
     args = parser.parse_args()
     return args
 
@@ -37,7 +37,8 @@ def main():
     print(args)
 
     from transformers import LlamaTokenizer, LlamaForCausalLM
-    tokenizer = LlamaTokenizer.from_pretrained(args.model_name_or_path)
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
 
     pt_data = torch.load(args.pt_data_path, map_location=torch.device('cpu'))
     with open(args.json_data_path, "r") as f:
@@ -54,7 +55,7 @@ def main():
 
         json_data_i = json_data[i]
         instruct_i = json_data_i['instruction']
-        output_i = json_data_i['output']
+        output_i = json_data_i['response']
 
         direct_answer_text = '### Response:' + output_i
         if args.prompt == 'wiz':
@@ -68,6 +69,18 @@ def main():
                 instruct_i = promt_to_use
             else:
                 temp_dict = {'instruction':instruct_i,'input':input_i}
+                promt_to_use = PROMPT_DICT["prompt_input"].format_map(temp_dict)
+                whole_text = promt_to_use + output_i
+                instruct_i = promt_to_use
+        elif args.prompt == 'code':
+            input_i = json_data_i['prompt']
+            if input_i == '':
+                temp_dict = {'instruction':instruct_i}
+                promt_to_use = PROMPT_DICT["prompt_no_input"].format_map(temp_dict)
+                whole_text = promt_to_use + output_i
+                instruct_i = promt_to_use
+            else:
+                temp_dict = {'instruction':instruct_i,'prompt':input_i}
                 promt_to_use = PROMPT_DICT["prompt_input"].format_map(temp_dict)
                 whole_text = promt_to_use + output_i
                 instruct_i = promt_to_use
@@ -103,8 +116,8 @@ def main():
             mean_1 = loss_list_1.mean()
             mean_2 = loss_list_2.mean()
             mean_rate = mean_2/mean_1
-            if mean_rate > 1: 
-                continue
+            #if mean_rate > 1: 
+                #continue
 
             mean_rate_list.append((mean_rate,i))
             mean_list_1.append((mean_1,i))

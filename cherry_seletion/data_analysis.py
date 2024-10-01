@@ -17,7 +17,7 @@ PROMPT_DICT = {
     "prompt_input": (
         "Below is an instruction that describes a task, paired with an input that provides further context. "
         "Write a response that appropriately completes the request.\n\n"
-        "### Instruction:\n{instruction}\n\n### Input:\n{input}\n\n### Response:"
+        "### Instruction:\n{instruction}\n\n### Input:\n{prompt}\n\n### Response:"
     ),
     "prompt_no_input": (
         "Below is an instruction that describes a task. "
@@ -34,7 +34,7 @@ def parse_args():
     parser.add_argument("--max_length", type=int, default=512)
     parser.add_argument("--start_idx", type=int, default=0)
     parser.add_argument("--end_idx", type=int, default=-1)
-    parser.add_argument("--prompt", type=str, default='wiz', help='wiz, alpaca')
+    parser.add_argument("--prompt", type=str, default='wiz', help='wiz, alpaca, code')
     parser.add_argument("--mod", type=str, default='pre', help='pre, cherry')
     args = parser.parse_args()
     return args
@@ -90,8 +90,9 @@ def main():
     print(args)
 
     from transformers import LlamaTokenizer, LlamaForCausalLM
-    model = LlamaForCausalLM.from_pretrained(args.model_name_or_path, device_map="auto", cache_dir='../cache', output_hidden_states=True)
-    tokenizer = LlamaTokenizer.from_pretrained(args.model_name_or_path, cache_dir='../cache')
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path, device_map="auto", cache_dir='../cache', output_hidden_states=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, cache_dir='../cache')
 
     model.eval()
 
@@ -115,7 +116,7 @@ def main():
 
         data_i = sampled_data[i]
         instruct_i = data_i['instruction']
-        output_i = data_i['output']
+        output_i = data_i['response']
 
         direct_answer_text = '### Response:' + output_i
         if args.prompt == 'wiz':
@@ -133,6 +134,19 @@ def main():
                 instruct_i = promt_to_use
             else:
                 temp_dict = {'instruction':instruct_i,'input':input_i}
+                promt_to_use = PROMPT_DICT["prompt_input"].format_map(temp_dict)
+                whole_text = promt_to_use + output_i
+                instruct_i = promt_to_use
+        
+        elif args.prompt == 'code':
+            input_i = data_i['prompt'] if 'prompt' in data_i.keys() else ''
+            if input_i == '':
+                temp_dict = {'instruction':instruct_i}
+                promt_to_use = PROMPT_DICT["prompt_no_input"].format_map(temp_dict)
+                whole_text = promt_to_use + output_i
+                instruct_i = promt_to_use
+            else:
+                temp_dict = {'instruction':instruct_i,'prompt':input_i}
                 promt_to_use = PROMPT_DICT["prompt_input"].format_map(temp_dict)
                 whole_text = promt_to_use + output_i
                 instruct_i = promt_to_use
